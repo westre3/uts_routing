@@ -78,14 +78,14 @@ class graph:
           self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]] = {}
           #self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]]["weight"] = -1
           self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]]["route"] = route["route_id"]
-          
+
     for arrival_estimate in arrival_estimates["data"]:
       for arrival in arrival_estimate["arrivals"]:
         if arrival["route_id"] in routes_to_exclude:
           pass
         elif arrival["route_id"] not in self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"]:
           self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"][arrival["route_id"]] = []
-        self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"][arrival["route_id"]].append(time.mktime(time.strptime(arrival["arrival_at"][:16], "%Y-%m-%dT%H:%M")))
+          self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"][arrival["route_id"]].append(time.mktime(time.strptime(arrival["arrival_at"][:16], "%Y-%m-%dT%H:%M")))
           
   def add_source_node(self, location):
     self.adj_list[SRC_ID] = {}
