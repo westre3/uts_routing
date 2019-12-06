@@ -33,6 +33,11 @@ routes_to_exclude = [
 operating_condition = "LIVE"
 #operating_condition = "SAVED"
 
+# Saved time options
+#saved_arrival_estimates = ("saved_arrival_estimates_12_05_16_30.txt", 1575585000.0)
+#saved_arrival_estimates = ("saved_arrival_estimates_12_06_14_30.txt", 1575664200.0)
+saved_arrival_estimates = ("saved_arrival_estimates_12_06_15_00.txt", 1575666000.0)
+
 # Some simple Google Maps code that uses the Static Maps API to save
 # a PNG image of the specified location
 #
@@ -272,7 +277,29 @@ class graph:
     path.reverse()
     return path
       
-    
+
+def google_routes_test(location, image_file):
+  with open("GoogleMapsAPIKey.txt", "r") as fp:
+    key = fp.readline()
+  
+  static_maps_url = "https://maps.googleapis.com/maps/api/staticmap"
+  segments_url = "https://transloc-api-1-2.p.rapidapi.com/segments.json"
+  zoom_level = 13
+  size = "500x500"
+  
+  transloc_key = "5fa48323f4mshca893848a7efd53p1bb117jsnd6adf17f2c76"
+  headers = {"x-rapidapi-host": host, "x-rapidapi-key": transloc_key}
+  payload = {"agencies": "347", "routes":"4013584"}
+  
+  segments = requests.get(segments_url, headers=headers, params=payload)
+  segments_json = json.loads(segments.text)
+  print(segments_json)
+  
+  #payload = {"center": location, "zoom": zoom_level, "size": size, "key": key, "path":"enc:ezegFrvd~Mv@uBdBuFLU|@yC`@eAd@cB"}
+  #r = requests.get(static_maps_url, params=payload)
+  
+  #with open(image_file, "wb") as fp:
+  #  fp.write(r.content)
     
 if __name__ == "__main__":
   # Use the TransLoc API to get route and stop information
@@ -302,7 +329,7 @@ if __name__ == "__main__":
     except:
       sys.exit("Unable to connect to TransLoc API")
   elif operating_condition == "SAVED":
-    with open("saved_arrival_estimates_4_30.txt", "r") as fp:
+    with open(saved_arrival_estimates[0], "r") as fp:
       arrival_estimates_json = json.load(fp)
   else:
     sys.exit("Unrecognized operating condition")
@@ -320,7 +347,10 @@ if __name__ == "__main__":
   colonnade2 = "38.042775,-78.51756"
   
   g.add_source_node(rice_location)
-  g.add_dest_node(thornton_location)
+  g.add_dest_node(jpa_location)
   g.add_walking_edges()
   
-  print(g.dijkstra(time.time()))
+  if operating_condition == "LIVE":
+    print(g.dijkstra(time.time()))
+  elif operating_condition == "SAVED":
+    print(g.dijkstra(saved_arrival_estimates[1]))
