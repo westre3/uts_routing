@@ -43,10 +43,10 @@ def googlemaps(location, image_file):
     key = fp.readline()
   
   static_maps_url = "https://maps.googleapis.com/maps/api/staticmap"
-  zoom_level = 12
+  zoom_level = 13
   size = "500x500"
   
-  payload = {"center": location, "zoom": zoom_level, "size": size, "key": key}
+  payload = {"center": location, "zoom": zoom_level, "size": size, "key": key, "path":"enc:ezegFrvd~Mv@uBdBuFLU|@yC`@eAd@cB"}
   r = requests.get(static_maps_url, params=payload)
   
   with open(image_file, "wb") as fp:
@@ -315,9 +315,12 @@ if __name__ == "__main__":
   rice_location = "38.0316,-78.5108"
   thornton_location = "38.0333,-78.5097"
   jpa_location = "38.0459,-78.5067"
+  downtown = "38.0292,-78.4773"
+  colonnade = "38.042702, -78.517687"
+  colonnade2 = "38.042775,-78.51756"
   
   g.add_source_node(rice_location)
-  g.add_dest_node(jpa_location)
+  g.add_dest_node(thornton_location)
   g.add_walking_edges()
   
   print(g.dijkstra(time.time()))
