@@ -3,6 +3,7 @@ import json
 import math
 import time
 import sys
+import route_listing
 
 SRC_ID = "SRC"
 DST_ID = "DST"
@@ -27,16 +28,19 @@ routes_to_exclude = [
 "4013476", # Crozet West Connect
 "4013478", # Lovingston Connect
 "4013480", # Park connect
-"4013640"  # Crozet Connect Loop
+"4013640",  # Crozet Connect Loop
+"4013590",  # Early Inner Loop (add back if time permits)
+"4013700"
 ]
 
-#operating_condition = "LIVE"
-operating_condition = "SAVED"
+operating_condition = "LIVE"
+#operating_condition = "SAVED"
 
 # Saved time options
-saved_arrival_estimates = ("saved_arrival_estimates_12_05_16_30.txt", 1575585000.0)
+#saved_arrival_estimates = ("saved_arrival_estimates_12_05_16_30.txt", 1575585000.0)
 #saved_arrival_estimates = ("saved_arrival_estimates_12_06_14_30.txt", 1575664200.0)
 #saved_arrival_estimates = ("saved_arrival_estimates_12_06_15_00.txt", 1575666000.0)
+#saved_arrival_estimates= ("saved_arrival_estimates_12_07_14_10.txt", 1575749400.0)
 
 # Some simple Google Maps code that uses the Static Maps API to save
 # a PNG image of the specified location
@@ -88,34 +92,34 @@ class graph:
         
       
     # Add edges between stops
-    for route in routes["data"]["347"]:
-      if route["route_id"] not in routes_to_exclude:
-        for index, stop in enumerate(route["stops"]):
+    for route in routes:
+      if route not in routes_to_exclude:
+        for index, stop in enumerate(routes[route]):
           # If the current stop has no arrival estimate, don't include it in the graph
           if stop not in arrival_estimates_exist:
             pass
           
           # If the current stop has an arrival estimate, but the next stop doesn't, skip over that
           # stop and add an edge to the next stop that does have an arrival estimate
-          elif stop in arrival_estimates_exist and route["stops"][(index + 1) % len(route["stops"])] not in arrival_estimates_exist:
+          elif stop in arrival_estimates_exist and routes[route][(index + 1) % len(routes[route])] not in arrival_estimates_exist:
             next_stop = None
-            for i in range(2, len(route["stops"])):
-              if route["stops"][(index + i) % len(route["stops"])] in arrival_estimates_exist:
+            for i in range(2, len(routes[route])):
+              if routes[route][(index + i) % len(routes[route])] in arrival_estimates_exist:
                 next_stop = i
                 break
               
-            if route["stops"][(index + next_stop) % len(route["stops"])] not in self.adj_list[stop]["edges"]:
-              self.adj_list[stop]["edges"][route["stops"][(index + next_stop) % len(route["stops"])]] = {}
-              self.adj_list[stop]["edges"][route["stops"][(index + next_stop) % len(route["stops"])]]["route"] = []
-            self.adj_list[stop]["edges"][route["stops"][(index + next_stop) % len(route["stops"])]]["route"].append(route["route_id"])
+            if routes[route][(index + next_stop) % len(routes[route])] not in self.adj_list[stop]["edges"]:
+              self.adj_list[stop]["edges"][routes[route][(index + next_stop) % len(routes[route])]] = {}
+              self.adj_list[stop]["edges"][routes[route][(index + next_stop) % len(routes[route])]]["route"] = []
+            self.adj_list[stop]["edges"][routes[route][(index + next_stop) % len(routes[route])]]["route"].append(route)
           
           # If the current stop and next stop both have arrival estimates, add an edge from
           # the current stop to the next stop
           else:
-            if route["stops"][(index + 1) % len(route["stops"])] not in self.adj_list[stop]["edges"]:
-              self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]] = {}
-              self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]]["route"] = []
-            self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]]["route"].append(route["route_id"])
+            if routes[route][(index + 1) % len(routes[route])] not in self.adj_list[stop]["edges"]:
+              self.adj_list[stop]["edges"][routes[route][(index + 1) % len(routes[route])]] = {}
+              self.adj_list[stop]["edges"][routes[route][(index + 1) % len(routes[route])]]["route"] = []
+            self.adj_list[stop]["edges"][routes[route][(index + 1) % len(routes[route])]]["route"].append(route)
 
     # Add arrival estimate information to stops
     for arrival_estimate in arrival_estimates["data"]:
@@ -261,9 +265,9 @@ class graph:
       # Update Dijkstra Value
       for connected_stop in g.adj_list[current_stop]["edges"]:
         if connected_stop == DST_ID:
-          estimated_arrival = g.adj_list[current_stop]["edges"][DST_ID]
-          route_to_connected_stop = "walk"
-          print("Walking time to DST_ID={}".format(estimated_arrival))
+          min_estimated_arrival = g.adj_list[current_stop]["edges"][DST_ID]
+          min_route = "walk"
+          print("Walking time to DST_ID={}".format(min_estimated_arrival))
         else:
           # Route that takes us from current_stop to connected_stop
           min_estimated_arrival = math.inf
@@ -286,9 +290,9 @@ class graph:
               min_estimated_arrival = estimated_arrival
               min_route = route_to_connected_stop
           
-        print("estimated_arrival={}, djcurrent={}, djnext={}".format(estimated_arrival, dijkstra_val[current_stop], dijkstra_val[connected_stop]))
+        print("min_estimated_arrival={}, djcurrent={}, djnext={}".format(min_estimated_arrival, dijkstra_val[current_stop], dijkstra_val[connected_stop]))
         if min_estimated_arrival + dijkstra_val[current_stop] < dijkstra_val[connected_stop]:
-          print("Updating dijkstra_val[{}] to {} and dijkstra_prev[{}] to {}".format(connected_stop, estimated_arrival + dijkstra_val[current_stop], connected_stop, current_stop))
+          print("Updating dijkstra_val[{}] to {} and dijkstra_prev[{}] to {}".format(connected_stop, min_estimated_arrival + dijkstra_val[current_stop], connected_stop, current_stop))
           dijkstra_val[connected_stop] = min_estimated_arrival + dijkstra_val[current_stop]
           dijkstra_prev[connected_stop] = (current_stop, min_route)
       
@@ -305,11 +309,11 @@ class graph:
 
 def google_routes_test(location, image_file):
   with open("GoogleMapsAPIKey.txt", "r") as fp:
-    key = fp.readline()
+    google_key = fp.readline()
   
   static_maps_url = "https://maps.googleapis.com/maps/api/staticmap"
   segments_url = "https://transloc-api-1-2.p.rapidapi.com/segments.json"
-  zoom_level = 13
+  #zoom_level = 13
   size = "500x500"
   
   transloc_key = "5fa48323f4mshca893848a7efd53p1bb117jsnd6adf17f2c76"
@@ -320,11 +324,11 @@ def google_routes_test(location, image_file):
   segments_json = json.loads(segments.text)
   print(segments_json)
   
-  #payload = {"center": location, "zoom": zoom_level, "size": size, "key": key, "path":"enc:ezegFrvd~Mv@uBdBuFLU|@yC`@eAd@cB"}
-  #r = requests.get(static_maps_url, params=payload)
+  payload = {"size": size, "key": google_key, "path":"enc:ezegFrvd~Mv@uBdBuFLU|@yC`@eAd@cB"}
+  r = requests.get(static_maps_url, params=payload)
   
-  #with open(image_file, "wb") as fp:
-  #  fp.write(r.content)
+  with open(image_file, "wb") as fp:
+    fp.write(r.content)
     
 if __name__ == "__main__":
   # Use the TransLoc API to get route and stop information
@@ -340,9 +344,9 @@ if __name__ == "__main__":
   
   try:
     stops = requests.get(stops_url, headers=headers, params=payload)
-    routes = requests.get(routes_url, headers=headers, params=payload)
+    #routes = requests.get(routes_url, headers=headers, params=payload)
     stops_json = json.loads(stops.text)
-    routes_json = json.loads(routes.text)
+    #routes_json = json.loads(routes.text)
   except:
     sys.exit("Unable to connect to TransLoc API")
   
@@ -361,7 +365,7 @@ if __name__ == "__main__":
 
   # Create the graph from what's returned by TransLoc
   g = graph()
-  g.parse_data(routes_json, stops_json, arrival_estimates_json)
+  g.parse_data(route_listing.routes, stops_json, arrival_estimates_json)
   
   # Add source, destination, and associated edges to graph  
   rice_location = "38.0316,-78.5108"
