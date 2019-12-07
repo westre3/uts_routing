@@ -30,13 +30,13 @@ routes_to_exclude = [
 "4013640"  # Crozet Connect Loop
 ]
 
-operating_condition = "LIVE"
-#operating_condition = "SAVED"
+#operating_condition = "LIVE"
+operating_condition = "SAVED"
 
 # Saved time options
-#saved_arrival_estimates = ("saved_arrival_estimates_12_05_16_30.txt", 1575585000.0)
+saved_arrival_estimates = ("saved_arrival_estimates_12_05_16_30.txt", 1575585000.0)
 #saved_arrival_estimates = ("saved_arrival_estimates_12_06_14_30.txt", 1575664200.0)
-saved_arrival_estimates = ("saved_arrival_estimates_12_06_15_00.txt", 1575666000.0)
+#saved_arrival_estimates = ("saved_arrival_estimates_12_06_15_00.txt", 1575666000.0)
 
 # Some simple Google Maps code that uses the Static Maps API to save
 # a PNG image of the specified location
@@ -74,8 +74,8 @@ class graph:
       # If this stop is only on routes we don't care about, we exclude it
       if len([r for r in datum["routes"] if r in routes_to_exclude]) == len(datum["routes"]):
         pass
-      #elif datum["stop_id"] not in arrival_estimates_exist:
-      #  pass
+      elif datum["stop_id"] not in arrival_estimates_exist:
+        pass
       else:
         dict_key = datum["stop_id"]
         self.adj_list[dict_key] = {}
@@ -84,8 +84,6 @@ class graph:
         self.adj_list[dict_key]["location"] += str(datum["location"]["lng"])
         self.adj_list[dict_key]["name"] = datum["name"]
         self.adj_list[dict_key]["arrival_estimates"] = {}
-        #self.adj_list[dict_key]["dijkstra_val"] = math.inf # For use by Dijkstra's Algorithm
-        #self.adj_list[dict_key]["dijkstra_prev"] = None
         self.adj_list[dict_key]["routes"] = datum["routes"]
         
       
@@ -93,10 +91,31 @@ class graph:
     for route in routes["data"]["347"]:
       if route["route_id"] not in routes_to_exclude:
         for index, stop in enumerate(route["stops"]):
-          if stop in arrival_estimates_exist:
-            self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]] = {}
-            #self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]]["weight"] = -1
-            self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]]["route"] = route["route_id"]
+          # If the current stop has no arrival estimate, don't include it in the graph
+          if stop not in arrival_estimates_exist:
+            pass
+          
+          # If the current stop has an arrival estimate, but the next stop doesn't, skip over that
+          # stop and add an edge to the next stop that does have an arrival estimate
+          elif stop in arrival_estimates_exist and route["stops"][(index + 1) % len(route["stops"])] not in arrival_estimates_exist:
+            next_stop = None
+            for i in range(2, len(route["stops"])):
+              if route["stops"][(index + i) % len(route["stops"])] in arrival_estimates_exist:
+                next_stop = i
+                break
+              
+            if route["stops"][(index + next_stop) % len(route["stops"])] not in self.adj_list[stop]["edges"]:
+              self.adj_list[stop]["edges"][route["stops"][(index + next_stop) % len(route["stops"])]] = {}
+              self.adj_list[stop]["edges"][route["stops"][(index + next_stop) % len(route["stops"])]]["route"] = []
+            self.adj_list[stop]["edges"][route["stops"][(index + next_stop) % len(route["stops"])]]["route"].append(route["route_id"])
+          
+          # If the current stop and next stop both have arrival estimates, add an edge from
+          # the current stop to the next stop
+          else:
+            if route["stops"][(index + 1) % len(route["stops"])] not in self.adj_list[stop]["edges"]:
+              self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]] = {}
+              self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]]["route"] = []
+            self.adj_list[stop]["edges"][route["stops"][(index + 1) % len(route["stops"])]]["route"].append(route["route_id"])
 
     # Add arrival estimate information to stops
     for arrival_estimate in arrival_estimates["data"]:
@@ -247,27 +266,33 @@ class graph:
           print("Walking time to DST_ID={}".format(estimated_arrival))
         else:
           # Route that takes us from current_stop to connected_stop
-          route_to_connected_stop = g.adj_list[current_stop]["edges"][connected_stop]["route"]
+          min_estimated_arrival = math.inf
+          min_route = None
+          for route_to_connected_stop in g.adj_list[current_stop]["edges"][connected_stop]["route"]:
           
           # Estimated arrival of bus at connected_stop via this route
-          print("current_stop:{}, connected_stop:{}, route:{}".format(current_stop, connected_stop, route_to_connected_stop))
-          if route_to_connected_stop in g.adj_list[connected_stop]["arrival_estimates"]:
-            estimated_arrival_list = g.adj_list[connected_stop]["arrival_estimates"][route_to_connected_stop]
-          else:
-            estimated_arrival_list = [math.inf]
+            print("current_stop:{}, connected_stop:{}, route:{}".format(current_stop, connected_stop, route_to_connected_stop))
+            if route_to_connected_stop in g.adj_list[connected_stop]["arrival_estimates"]:
+              estimated_arrival_list = g.adj_list[connected_stop]["arrival_estimates"][route_to_connected_stop]
+            else:
+              estimated_arrival_list = [math.inf]
           
-          for val in estimated_arrival_list:
-            if val - dijkstra_val[current_stop] - current_time >= 0:
-              estimated_arrival = val - dijkstra_val[current_stop] - current_time
-              break
+            for val in estimated_arrival_list:
+              if val - dijkstra_val[current_stop] - current_time >= 0:
+                estimated_arrival = val - dijkstra_val[current_stop] - current_time
+                break
+            
+            if estimated_arrival < min_estimated_arrival:
+              min_estimated_arrival = estimated_arrival
+              min_route = route_to_connected_stop
           
         print("estimated_arrival={}, djcurrent={}, djnext={}".format(estimated_arrival, dijkstra_val[current_stop], dijkstra_val[connected_stop]))
-        if estimated_arrival + dijkstra_val[current_stop] < dijkstra_val[connected_stop]:
+        if min_estimated_arrival + dijkstra_val[current_stop] < dijkstra_val[connected_stop]:
           print("Updating dijkstra_val[{}] to {} and dijkstra_prev[{}] to {}".format(connected_stop, estimated_arrival + dijkstra_val[current_stop], connected_stop, current_stop))
-          dijkstra_val[connected_stop] = estimated_arrival + dijkstra_val[current_stop]
-          dijkstra_prev[connected_stop] = (current_stop, route_to_connected_stop)
+          dijkstra_val[connected_stop] = min_estimated_arrival + dijkstra_val[current_stop]
+          dijkstra_prev[connected_stop] = (current_stop, min_route)
       
-    path = [(DST_ID, "walk")]
+    path = [DST_ID]
     current = DST_ID
     print(dijkstra_prev)
     while SRC_ID not in path:
@@ -275,7 +300,7 @@ class graph:
       current = dijkstra_prev[current][0]
     
     path.reverse()
-    return path
+    return (path, dijkstra_val[DST_ID])
       
 
 def google_routes_test(location, image_file):
@@ -351,6 +376,15 @@ if __name__ == "__main__":
   g.add_walking_edges()
   
   if operating_condition == "LIVE":
-    print(g.dijkstra(time.time()))
+    (path, time) = g.dijkstra(time.time())
+    print(path, time)
+#    print("{}:".format(time))
+#    for i in range(len(path)):
+#      if path[i] == "SRC":
+#        print("SRC -> {} via {}".format(g.adj_list[path[i+1][0]]["name"], "walking"))
+#      elif path[i] == "DST":
+#        print("{} -> DST via {}".format(g.adj_list[path[i-1][0]]["name"], "walking"))
+#      else:
+#        print("{} -> {} via {}".format(g.adj_list[path[i-1][0]]["name"], g.adj_list[path[i][0]]["name"], path[i][1]))
   elif operating_condition == "SAVED":
     print(g.dijkstra(saved_arrival_estimates[1]))
