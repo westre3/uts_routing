@@ -5,7 +5,8 @@ import time as tm
 import sys
 import route_listing
 from tkinter import *
-from PIL import ImageTk,Image 
+from PIL import ImageTk,Image
+import os
 
 SRC_ID = "SRC"
 DST_ID = "DST"
@@ -13,6 +14,7 @@ DST_ID = "DST"
 host = "transloc-api-1-2.p.rapidapi.com"
 key = "5fa48323f4mshca893848a7efd53p1bb117jsnd6adf17f2c76"
 agencies = "347" # UVA
+gui_path_display = ""
 
 # Routes we include by default:
 # Northline               "4013584"
@@ -315,7 +317,7 @@ class graph:
       
 g = graph()
 
-def display_routes(unique_routes, unique_stops, src_polyline, dst_polyline, image_file):
+def display_routes(path, unique_routes, unique_stops, src_polyline, dst_polyline, image_file):
   with open("GoogleMapsAPIKey.txt", "r") as fp:
     google_key = fp.readline()
   
@@ -325,45 +327,60 @@ def display_routes(unique_routes, unique_stops, src_polyline, dst_polyline, imag
   
   transloc_key = "5fa48323f4mshca893848a7efd53p1bb117jsnd6adf17f2c76"
   headers = {"x-rapidapi-host": host, "x-rapidapi-key": transloc_key}
-  payload = {"agencies": "347"}
+  transloc_payload = {"agencies": "347"}
   
-  segments_list = []
-  for unique_route in unique_routes:
-    payload["routes"] = unique_route
-  
-    segments = requests.get(segments_url, headers=headers, params=payload)
-    segments_json = json.loads(segments.text)
-  
-    segments_list.append([])
-    for segment_id in segments_json["data"]:
-      segments_list[-1].append(segments_json["data"][segment_id])
-      
-  #payload = {"size": size, "key": google_key, "path":"enc:}zdgFtud~MwBvE"|"enc:yyegFz~d~M_@[_Ak@"}
-  payload = [("size", size), ("key", google_key)]
+  google_payload = [("size", size), ("key", google_key)]
   colors = ["black", "brown", "green", "purple", "yellow", "blue", "gray", "orange"]
   color_index = 0
   
-  for route_poly in segments_list:
-    for segment in route_poly:
-      payload.append(("path", "color:" + colors[color_index] + "|enc:" + segment))
-    color_index += 1
+  route_color = {"4013576": "0x0066ff", "4013580": "0x00aeef", "4013582": "0xed1c24",
+                 "4013584": "0xf59cb0", "4013586": "0xfff200", "4013590": "0xa681ba",
+                 "4013594": "0x9e1f63", "4013696": "0x714294", "4013698": "0xdc9145",
+                 "4013700": "0xf4dc59"}
+  
+  for unique_route in unique_routes:
+    segments_list = []
+    transloc_payload["routes"] = unique_route
+  
+    segments = requests.get(segments_url, headers=headers, params=transloc_payload)
+    segments_json = json.loads(segments.text)
+  
+    for segment_id in segments_json["data"]:
+      segments_list.append(segments_json["data"][segment_id])
+      
+    for route_poly in segments_list:
+      google_payload.append(("path", "color:" + route_color[unique_route] + "|enc:" + route_poly))
   
   lat_lons = []
+  print("Path: " + str(path))
   for unique_stop in unique_stops:
-    lat_lons.append(g.adj_list[unique_stop]["location"])
+    if unique_stop == SRC_ID or unique_stop == DST_ID:
+      color = 'red'
+    else:
+      print("Unique stop: " + unique_stop)
+      # Find color for unique stop
+      for (stop, route) in path[1:-1]:
+        print("Checking stop " + stop)
+        if stop == unique_stop:
+          if route == "walk":
+            color = 'red'
+          else:
+            color = route_color[route]
+    
+    lat_lons.append((g.adj_list[unique_stop]["location"], color))
     
   current_label = 'A'
   for lat_lon in lat_lons:
-    payload.append(("markers", "size:mid|label:" + current_label + "|" + lat_lon))
+    google_payload.append(("markers", "size:mid|label:" + current_label + "|color:" + lat_lon[1] + "|" + lat_lon[0]))
     current_label = chr(ord(current_label) + 1)
   
   # Add source to first stop polyline
-  payload.append(("path", "color:red|enc:" + src_polyline))
+  google_payload.append(("path", "color:red|enc:" + src_polyline))
   
   # Add destination to last stop polyline
-  payload.append(("path", "color:red|enc:" + dst_polyline))
+  google_payload.append(("path", "color:red|enc:" + dst_polyline))
   
-  r = requests.get(static_maps_url, params=payload)
+  r = requests.get(static_maps_url, params=google_payload)
   
   with open(image_file, "wb") as fp:
     fp.write(r.content)
@@ -447,7 +464,7 @@ def run_program():
     r = requests.get(directions_url, params=payload)
     dst_json = json.loads(r.text)
     
-    display_routes(unique_routes, unique_stops, src_json["routes"][0]["overview_polyline"]["points"], dst_json["routes"][0]["overview_polyline"]["points"], "final_output.png")
+    display_routes(path, unique_routes, unique_stops, src_json["routes"][0]["overview_polyline"]["points"], dst_json["routes"][0]["overview_polyline"]["points"], "final_output.png")
     
   elif operating_condition == "SAVED":
     (path, time) = g.dijkstra(saved_arrival_estimates[1])
@@ -480,19 +497,12 @@ def run_program():
     r = requests.get(directions_url, params=payload)
     dst_json = json.loads(r.text)
     
-    display_routes(unique_routes, unique_stops, src_json["routes"][0]["overview_polyline"]["points"], dst_json["routes"][0]["overview_polyline"]["points"], "final_output.png")
-
-#    m2 = Tk()
-#    canvas = Canvas(m2, width = 1000, height = 1000)
-#    canvas.pack()
-#    img = ImageTk.PhotoImage(file="final_output.png")
-#    canvas.create_image(0,0, anchor=NW, image=img)
-#    m2.mainloop()
+    display_routes(path, unique_routes, unique_stops, src_json["routes"][0]["overview_polyline"]["points"], dst_json["routes"][0]["overview_polyline"]["points"], "final_output.png")
+    
+    os.system("final_output.png")
     
 if __name__ == "__main__":
   m = Tk()
-  #w = Canvas(m, width=500, height=500)
-  #w.pack()
   
   Label(m, text="Source").grid(row=0)
   Label(m, text="Destination").grid(row=1)
@@ -504,7 +514,7 @@ if __name__ == "__main__":
   e2.grid(row=1, column=1)
   
   Button(m, 
-        text='Go', command=run_program).grid(row=3, column=0, sticky=W, pady=4)
+        text='Find Route', command=run_program).grid(row=2, column=0, sticky=W, pady=4)
   
   
   m.mainloop()
