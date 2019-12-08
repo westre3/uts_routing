@@ -1,12 +1,18 @@
 import requests
 import json
 import math
-import time
+import time as tm
 import sys
 import route_listing
+from tkinter import *
+from PIL import ImageTk,Image 
 
 SRC_ID = "SRC"
 DST_ID = "DST"
+
+host = "transloc-api-1-2.p.rapidapi.com"
+key = "5fa48323f4mshca893848a7efd53p1bb117jsnd6adf17f2c76"
+agencies = "347" # UVA
 
 # Routes we include by default:
 # Northline               "4013584"
@@ -37,9 +43,9 @@ routes_to_exclude = [
 operating_condition = "SAVED"
 
 # Saved time options
-saved_arrival_estimates = ("saved_arrival_estimates_12_05_16_30.txt", 1575585000.0)
+#saved_arrival_estimates = ("saved_arrival_estimates_12_05_16_30.txt", 1575585000.0)
 #saved_arrival_estimates = ("saved_arrival_estimates_12_06_14_30.txt", 1575664200.0)
-#saved_arrival_estimates = ("saved_arrival_estimates_12_06_15_00.txt", 1575666000.0)
+saved_arrival_estimates = ("saved_arrival_estimates_12_06_15_00.txt", 1575666000.0)
 #saved_arrival_estimates= ("saved_arrival_estimates_12_07_14_10.txt", 1575749400.0)
 
 # Some simple Google Maps code that uses the Static Maps API to save
@@ -128,9 +134,9 @@ class graph:
           pass
         elif arrival["route_id"] not in self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"]:
           self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"][arrival["route_id"]] = []
-          self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"][arrival["route_id"]].append(time.mktime(time.strptime(arrival["arrival_at"][:16], "%Y-%m-%dT%H:%M")))
+          self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"][arrival["route_id"]].append(tm.mktime(tm.strptime(arrival["arrival_at"][:16], "%Y-%m-%dT%H:%M")))
         else:
-          self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"][arrival["route_id"]].append(time.mktime(time.strptime(arrival["arrival_at"][:16], "%Y-%m-%dT%H:%M")))
+          self.adj_list[arrival_estimate["stop_id"]]["arrival_estimates"][arrival["route_id"]].append(tm.mktime(tm.strptime(arrival["arrival_at"][:16], "%Y-%m-%dT%H:%M")))
         
   # Add the node representing the person's current location to the graph
   def add_source_node(self, location):
@@ -307,6 +313,7 @@ class graph:
     path.reverse()
     return (path, dijkstra_val[DST_ID])
       
+g = graph()
 
 def display_routes(unique_routes, unique_stops, src_polyline, dst_polyline, image_file):
   with open("GoogleMapsAPIKey.txt", "r") as fp:
@@ -361,14 +368,11 @@ def display_routes(unique_routes, unique_stops, src_polyline, dst_polyline, imag
   with open(image_file, "wb") as fp:
     fp.write(r.content)
     
-if __name__ == "__main__":
+def run_program():
   # Use the TransLoc API to get route and stop information
   stops_url = "https://transloc-api-1-2.p.rapidapi.com/stops.json"
   routes_url = "https://transloc-api-1-2.p.rapidapi.com/routes.json"
   arrival_estimates_url = "https://transloc-api-1-2.p.rapidapi.com/arrival-estimates.json"
-  host = "transloc-api-1-2.p.rapidapi.com"
-  key = "5fa48323f4mshca893848a7efd53p1bb117jsnd6adf17f2c76"
-  agencies = "347" # UVA
   
   headers = {"x-rapidapi-host": host, "x-rapidapi-key": key}
   payload = {"agencies": agencies}
@@ -395,7 +399,6 @@ if __name__ == "__main__":
     sys.exit("Unrecognized operating condition")
 
   # Create the graph from what's returned by TransLoc
-  g = graph()
   g.parse_data(route_listing.routes, stops_json, arrival_estimates_json)
   
   # Add source, destination, and associated edges to graph  
@@ -409,12 +412,12 @@ if __name__ == "__main__":
   barracks_location = '38.048796,-78.505219'
   lake_monticello = '37.911027,-78.326811'
   
-  g.add_source_node(colonnade)
-  g.add_dest_node(lake_monticello)
+  g.add_source_node(e1.get())
+  g.add_dest_node(e2.get())
   g.add_walking_edges()
   
   if operating_condition == "LIVE":
-    (path, time) = g.dijkstra(time.time())
+    (path, time) = g.dijkstra(tm.time())
     
     unique_routes = []
     unique_stops = [SRC_ID]
@@ -478,3 +481,30 @@ if __name__ == "__main__":
     dst_json = json.loads(r.text)
     
     display_routes(unique_routes, unique_stops, src_json["routes"][0]["overview_polyline"]["points"], dst_json["routes"][0]["overview_polyline"]["points"], "final_output.png")
+
+#    m2 = Tk()
+#    canvas = Canvas(m2, width = 1000, height = 1000)
+#    canvas.pack()
+#    img = ImageTk.PhotoImage(file="final_output.png")
+#    canvas.create_image(0,0, anchor=NW, image=img)
+#    m2.mainloop()
+    
+if __name__ == "__main__":
+  m = Tk()
+  #w = Canvas(m, width=500, height=500)
+  #w.pack()
+  
+  Label(m, text="Source").grid(row=0)
+  Label(m, text="Destination").grid(row=1)
+  
+  e1 = Entry(m)
+  e2 = Entry(m)
+  
+  e1.grid(row=0, column=1)
+  e2.grid(row=1, column=1)
+  
+  Button(m, 
+        text='Go', command=run_program).grid(row=3, column=0, sticky=W, pady=4)
+  
+  
+  m.mainloop()
