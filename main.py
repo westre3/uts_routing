@@ -33,11 +33,11 @@ routes_to_exclude = [
 "4013700"
 ]
 
-operating_condition = "LIVE"
-#operating_condition = "SAVED"
+#operating_condition = "LIVE"
+operating_condition = "SAVED"
 
 # Saved time options
-#saved_arrival_estimates = ("saved_arrival_estimates_12_05_16_30.txt", 1575585000.0)
+saved_arrival_estimates = ("saved_arrival_estimates_12_05_16_30.txt", 1575585000.0)
 #saved_arrival_estimates = ("saved_arrival_estimates_12_06_14_30.txt", 1575664200.0)
 #saved_arrival_estimates = ("saved_arrival_estimates_12_06_15_00.txt", 1575666000.0)
 #saved_arrival_estimates= ("saved_arrival_estimates_12_07_14_10.txt", 1575749400.0)
@@ -280,7 +280,8 @@ class graph:
               estimated_arrival_list = g.adj_list[connected_stop]["arrival_estimates"][route_to_connected_stop]
             else:
               estimated_arrival_list = [math.inf]
-          
+
+            estimated_arrival = math.inf          
             for val in estimated_arrival_list:
               if val - dijkstra_val[current_stop] - current_time >= 0:
                 estimated_arrival = val - dijkstra_val[current_stop] - current_time
@@ -307,24 +308,54 @@ class graph:
     return (path, dijkstra_val[DST_ID])
       
 
-def google_routes_test(location, image_file):
+def display_routes(unique_routes, unique_stops, src_polyline, dst_polyline, image_file):
   with open("GoogleMapsAPIKey.txt", "r") as fp:
     google_key = fp.readline()
   
   static_maps_url = "https://maps.googleapis.com/maps/api/staticmap"
   segments_url = "https://transloc-api-1-2.p.rapidapi.com/segments.json"
-  #zoom_level = 13
   size = "500x500"
   
   transloc_key = "5fa48323f4mshca893848a7efd53p1bb117jsnd6adf17f2c76"
   headers = {"x-rapidapi-host": host, "x-rapidapi-key": transloc_key}
-  payload = {"agencies": "347", "routes":"4013584"}
+  payload = {"agencies": "347"}
   
-  segments = requests.get(segments_url, headers=headers, params=payload)
-  segments_json = json.loads(segments.text)
-  print(segments_json)
+  segments_list = []
+  for unique_route in unique_routes:
+    payload["routes"] = unique_route
   
-  payload = {"size": size, "key": google_key, "path":"enc:ezegFrvd~Mv@uBdBuFLU|@yC`@eAd@cB"}
+    segments = requests.get(segments_url, headers=headers, params=payload)
+    segments_json = json.loads(segments.text)
+  
+    segments_list.append([])
+    for segment_id in segments_json["data"]:
+      segments_list[-1].append(segments_json["data"][segment_id])
+      
+  #payload = {"size": size, "key": google_key, "path":"enc:}zdgFtud~MwBvE"|"enc:yyegFz~d~M_@[_Ak@"}
+  payload = [("size", size), ("key", google_key)]
+  colors = ["black", "brown", "green", "purple", "yellow", "blue", "gray", "orange"]
+  color_index = 0
+  
+  for route_poly in segments_list:
+    for segment in route_poly:
+      payload.append(("path", "color:" + colors[color_index] + "|enc:" + segment))
+    color_index += 1
+  
+  lat_lons = []
+  for unique_stop in unique_stops:
+    lat_lons.append(g.adj_list[unique_stop]["location"])
+    
+  current_label = 'A'
+  for lat_lon in lat_lons:
+    payload.append(("markers", "size:mid|label:" + current_label + "|" + lat_lon))
+    current_label = chr(ord(current_label) + 1)
+  
+  # Add source to first stop polyline
+  payload.append(("path", "color:red|enc:" + src_polyline))
+  
+  # Add destination to last stop polyline
+  payload.append(("path", "color:red|enc:" + dst_polyline))
+  
   r = requests.get(static_maps_url, params=payload)
   
   with open(image_file, "wb") as fp:
@@ -374,21 +405,76 @@ if __name__ == "__main__":
   downtown = "38.0292,-78.4773"
   colonnade = "38.042702, -78.517687"
   colonnade2 = "38.042775,-78.51756"
+  lile_location = '38.035015,-78.516131'
+  barracks_location = '38.048796,-78.505219'
+  lake_monticello = '37.911027,-78.326811'
   
-  g.add_source_node(rice_location)
-  g.add_dest_node(jpa_location)
+  g.add_source_node(colonnade)
+  g.add_dest_node(lake_monticello)
   g.add_walking_edges()
   
   if operating_condition == "LIVE":
     (path, time) = g.dijkstra(time.time())
-    print(path, time)
-#    print("{}:".format(time))
-#    for i in range(len(path)):
-#      if path[i] == "SRC":
-#        print("SRC -> {} via {}".format(g.adj_list[path[i+1][0]]["name"], "walking"))
-#      elif path[i] == "DST":
-#        print("{} -> DST via {}".format(g.adj_list[path[i-1][0]]["name"], "walking"))
-#      else:
-#        print("{} -> {} via {}".format(g.adj_list[path[i-1][0]]["name"], g.adj_list[path[i][0]]["name"], path[i][1]))
+    
+    unique_routes = []
+    unique_stops = [SRC_ID]
+    for route_taken in path:
+        if route_taken == SRC_ID or route_taken == DST_ID:
+            pass
+        else:
+            if route_taken[0] not in unique_stops:
+                unique_stops.append(route_taken[0])
+            if route_taken[1] not in unique_routes and route_taken[1] != "walk":
+              unique_routes.append(route_taken[1])
+
+    unique_stops.append(DST_ID)
+    print(path, time, unique_routes, unique_stops)
+
+    directions_url = "https://maps.googleapis.com/maps/api/directions/json?"
+    
+    with open("GoogleMapsAPIKey.txt", "r") as fp:
+      google_key = fp.readline()
+  
+    payload = {"key": google_key, "origin": g.adj_list[SRC_ID]["location"], "destination": g.adj_list[unique_stops[1]]["location"], "mode": "walking"}
+    r = requests.get(directions_url, params=payload)
+    src_json = json.loads(r.text)
+    
+    payload["origin"] = g.adj_list[unique_stops[-2]]["location"]
+    payload["destination"] = g.adj_list[DST_ID]["location"]
+    r = requests.get(directions_url, params=payload)
+    dst_json = json.loads(r.text)
+    
+    display_routes(unique_routes, unique_stops, src_json["routes"][0]["overview_polyline"]["points"], dst_json["routes"][0]["overview_polyline"]["points"], "final_output.png")
+    
   elif operating_condition == "SAVED":
-    print(g.dijkstra(saved_arrival_estimates[1]))
+    (path, time) = g.dijkstra(saved_arrival_estimates[1])
+    
+    unique_routes = []
+    unique_stops = [SRC_ID]
+    for route_taken in path:
+        if route_taken == SRC_ID or route_taken == DST_ID:
+            pass
+        else:
+            if route_taken[0] not in unique_stops:
+                unique_stops.append(route_taken[0])
+            if route_taken[1] not in unique_routes and route_taken[1] != "walk":
+              unique_routes.append(route_taken[1])
+
+    unique_stops.append(DST_ID)
+    print(path, time, unique_routes, unique_stops)
+    
+    directions_url = "https://maps.googleapis.com/maps/api/directions/json?"
+    
+    with open("GoogleMapsAPIKey.txt", "r") as fp:
+      google_key = fp.readline()
+  
+    payload = {"key": google_key, "origin": g.adj_list[SRC_ID]["location"], "destination": g.adj_list[unique_stops[1]]["location"], "mode": "walking"}
+    r = requests.get(directions_url, params=payload)
+    src_json = json.loads(r.text)
+    
+    payload["origin"] = g.adj_list[unique_stops[-2]]["location"]
+    payload["destination"] = g.adj_list[DST_ID]["location"]
+    r = requests.get(directions_url, params=payload)
+    dst_json = json.loads(r.text)
+    
+    display_routes(unique_routes, unique_stops, src_json["routes"][0]["overview_polyline"]["points"], dst_json["routes"][0]["overview_polyline"]["points"], "final_output.png")
