@@ -1,114 +1,13 @@
 import requests
 import json
-import math
 import time as tm
 import sys
-from tkinter import *
-from PIL import ImageTk,Image
-import os
-from heapq import *
-import itertools
 import logging
+from data_structures import *
+import pathlib
 
 SRC_ID = "SRC"
 DST_ID = "DST"
-
-# Based on the Python docs' example code for using heapq
-# I'm using this wrapper class so that two heap elements with equal priorities
-# are removed
-class PriorityQueue:
-  """
-  Based on the Python docs' example code for using heapq. I'm using this
-  wrapper class for heapq so that two heap elements with equal priorities are
-  removed in the order of their insertion and also so that the heap re-orders
-  itself when an element's priority is changed.
-  """
-
-  def __init__(self):
-    self.pq = []
-    self.entry_finder = {}
-    self.REMOVED = '<removed-task>'
-    self.counter = itertools.count()
-
-  def add_task(self, task, priority=0):
-    count = next(self.counter)
-    entry = [priority, count, task]
-    self.entry_finder[task] = entry
-    heappush(self.pq, entry)
-
-  def update_task(self, task, priority):
-    if task in self.entry_finder:
-      self.remove_task(task)
-    count = next(self.counter)
-    entry = [priority, count, task]
-    self.entry_finder[task] = entry
-    heappush(self.pq, entry)
-
-  def remove_task(self, task):
-    entry = self.entry_finder.pop(task)
-    entry[-1] = self.REMOVED
-
-  def pop_task(self):
-    while self.pq:
-      priority, count, task = heappop(self.pq)
-      if task is not self.REMOVED:
-        del self.entry_finder[task]
-        return task
-
-  def __contains__(self, task):
-    return task in self.entry_finder and self.entry_finder[task] is not self.REMOVED
-
-class Node:
-  def __init__(self, stop, name, location):
-
-    # The unique ID number of the stop
-    self.stop = stop
-
-    # The English name of the stop
-    self.name = name
-
-    # For Dijkstra's algorithm
-    self.dijkstra = math.inf
-    self.unvisited = True
-    self.p = None
-    self.n = None # to be used only once a path is found
-    self.via = None
-
-    # A dictionary of the estimated arrival times at this stop for each route
-    self.arrival_times = {}
-
-    # A mapping of arrival times to the vehicle ID arriving at that time
-    self.buses = {}
-
-    # The latitude and longitude of the stop
-    self.location = location
-
-  # Define < so we can use Node objects in priority queue
-  def __lt__(self, other):
-    return self.dijkstra < other.dijkstra
-
-class Edge:
-  def __init__(self, from_stop, to_stop, route, name, walking_time=None):
-
-    # The source node of this directed edge
-    self.from_stop = from_stop
-
-    # The destination node of this directed edge
-    self.to_stop = to_stop
-
-    # The unique route ID that this edge corresponds to
-    self.route = route
-
-    # The English name of the route this edge corresponds to
-    self.name = name
-
-    self.walking_time = walking_time
-
-# A class to hold the actual graph we'll be working with
-class Graph:
-  def __init__(self):
-    self.nodes = {}
-    self.adj_list = {}
 
 # Takes in JSON structures specifying routes, stops, and estimated arrival times
 # and parses them into the graph's nodes and edges
@@ -185,42 +84,42 @@ def dijkstra(g, current_time):
   # Min Heap Priority Queue
   pq = PriorityQueue()
 
-  g.nodes[SRC_ID].dijkstra = current_time
+  g.nodes[SRC_ID].time = current_time
 
   # Put every node in the priority queue. They've already been marked
   # unvisited.
   for node in g.nodes:
-    pq.add_task(g.nodes[node], g.nodes[node].dijkstra)
+    pq.add_task(g.nodes[node], g.nodes[node].time)
 
   while g.nodes[DST_ID] in pq:
     u = pq.pop_task()
 
     u.unvisited = False
 
-    logging.debug(f"Removed stop {u.name} with ID {u.stop} from Priority Queue. We can reach this stop in {u.dijkstra - current_time} s")
+    logging.debug(f"Removed stop {u.name} with ID {u.stop_id} from Priority Queue. We can reach this stop in {u.time - current_time} s")
 
-    for e in g.adj_list[u.stop]:
+    for e in g.adj_list[u.stop_id]:
       v = g.nodes[e.to_stop]
-      logging.debug(f"Considering edge {e.name} from {u.name} with ID {u.stop} to {v.name} with ID {v.stop}")
+      logging.debug(f"Considering edge {e.name} from {u.name} with ID {u.stop_id} to {v.name} with ID {v.stop_id}")
 
       if v.unvisited:
 
         # Compute the edge weight differently depending on if this is a
         # bus edge or a walking edge
         if e.name == "walking":
-          logging.debug(f"This is a walking edge. Comparing {u.dijkstra - current_time} s + {e.walking_time} s to {v.dijkstra - current_time} s")
-          if u.dijkstra + e.walking_time < v.dijkstra:
-            v.dijkstra = u.dijkstra + e.walking_time
-            v.via = e
-            pq.update_task(v, v.dijkstra)
-            logging.debug(f"This route is faster. Updating v's time to {v.dijkstra - current_time} s")
+          logging.debug(f"This is a walking edge. Comparing {u.time - current_time} s + {e.walking_time} s to {v.time - current_time} s")
+          if u.time + e.walking_time < v.time:
+            v.time = u.time + e.walking_time
+            v.p = e
+            pq.update_task(v, v.time)
+            logging.debug(f"This route is faster. Updating v's time to {v.time - current_time} s")
 
           else:
             logging.debug(f"This route is not faster.")
 
         else:
-          # Find the next time a bus on e.route is arriving at u.stop
-          arrivals = [ar for ar in u.arrival_times[e.route] if ar >= u.dijkstra]
+          # Find the next time a bus on e's route is arriving at u
+          arrivals = [ar for ar in u.arrival_times[e.route_id] if ar >= u.time]
 
           # If we don't have an arrival estimate for any buses on this route
           # at the current stop, then we assume that we'd have to wait a
@@ -237,7 +136,7 @@ def dijkstra(g, current_time):
           # Find the first time that the same bus arrives at the next stop
           # after it already arrived at this top. This is the time at which
           # we would arrive at v if we traveled along edge e
-          arrivals_at_v = [ar for ar in v.arrival_times[e.route] if v.buses[ar] == next_bus and ar > next_arrival]
+          arrivals_at_v = [ar for ar in v.arrival_times[e.route_id] if v.buses[ar] == next_bus and ar > next_arrival]
 
           # If the next bus to arrive at the current stop has no arrival
           # estimates at the next stop, then we don't consider this edge
@@ -247,13 +146,13 @@ def dijkstra(g, current_time):
             continue
 
           logging.debug(f"This is a bus edge. Bus {next_bus} will arrive at u at time {next_arrival - current_time} s and at v at time {arrival_at_v - current_time}")
-          logging.debug(f"Comparing {arrival_at_v - current_time} s to {v.dijkstra - current_time} s")
+          logging.debug(f"Comparing {arrival_at_v - current_time} s to {v.time - current_time} s")
 
-          if arrival_at_v < v.dijkstra:
-            v.dijkstra = arrival_at_v
-            v.via = e
-            pq.update_task(v, v.dijkstra)
-            logging.debug(f"This route is faster. Updating v's time to {v.dijkstra - current_time} s")
+          if arrival_at_v < v.time:
+            v.time = arrival_at_v
+            v.p = e
+            pq.update_task(v, v.time)
+            logging.debug(f"This route is faster. Updating v's time to {v.time - current_time} s")
 
           else:
             logging.debug(f"This route is not faster.")
@@ -261,10 +160,10 @@ def dijkstra(g, current_time):
   path = [DST_ID]
   while SRC_ID not in path:
     current_stop = g.nodes[path[0]]
-    prev_stop = g.nodes[current_stop.via.from_stop]
-    prev_stop.n = current_stop.via
-    path.insert(0, prev_stop.stop)
-    logging.debug(f"Prepended stop {prev_stop.name} with ID {prev_stop.stop} to path")
+    prev_stop = g.nodes[current_stop.p.from_stop]
+    prev_stop.n = current_stop.p
+    path.insert(0, prev_stop.stop_id)
+    logging.debug(f"Prepended stop {prev_stop.name} with ID {prev_stop.stop_id} to path")
 
   # If our path has only walking edges from SRC to DST, simply make the path
   # two elements long. Google sometimes shows that it's faster to walk from
@@ -280,7 +179,7 @@ def dijkstra(g, current_time):
     path = [SRC_ID, DST_ID]
 
   for i in range(len(path)):
-    logging.debug(f"path[{i}] = {g.nodes[path[i]].name} with ID {g.nodes[path[i]].stop}")
+    logging.debug(f"path[{i}] = {g.nodes[path[i]].name} with ID {g.nodes[path[i]].stop_id}")
 
   return path
 
@@ -305,8 +204,8 @@ def display_routes(g, path, stops, routes, image_file):
 
   unique_routes = set()
   for stop in path[:-1]: # There is no next stop for DST
-    if g.nodes[stop].n.route:
-      unique_routes.add(g.nodes[stop].n.route)
+    if g.nodes[stop].n.route_id:
+      unique_routes.add(g.nodes[stop].n.route_id)
 
   # Data structure to lookup route colors
   color_lookup = {}
@@ -407,17 +306,17 @@ def display_routes(g, path, stops, routes, image_file):
       color = "red"
 
     # We display markers for every stop at which we change buses
-    elif g.nodes[stop].via.route != g.nodes[stop].n.route:
+    elif g.nodes[stop].p.route_id != g.nodes[stop].n.route_id:
 
       # If we're getting on a different bus, we color the marker the color of
       # the route that we're getting on
-      if g.nodes[stop].n.route:
-        color = color_lookup[g.nodes[stop].n.route]
+      if g.nodes[stop].n.route_id:
+        color = color_lookup[g.nodes[stop].n.route_id]
 
       # If we're getting off of a bus and walking to DST, we color the makerer
       # the color of the route we were just on
       else:
-        color = color_lookup[g.nodes[stop].via.route]
+        color = color_lookup[g.nodes[stop].p.route_id]
 
     # We don't display markers for stops that we simply pass through on a bus
     else:
@@ -557,10 +456,16 @@ def conv_to_dict(latlon):
   return {"lat" : float(latlon[0]), "lng" : float(latlon[1])}
 
 def run_program():
-  source = e1.get()
-  destination = e2.get()
+  # source = e1.get()
+  # destination = e2.get()
 
-  live = True
+  source = rice_location
+  destination = jpa_location
+
+  live = False
+
+  # Create logs folder if it doesn't exist
+  pathlib.Path("./logs").mkdir(parents=True, exist_ok=True)
 
   # Log information about last run to aid in debugging
   logging.basicConfig(level=logging.DEBUG, filename="logs/last_run.log", filemode="w", format="%(levelname)s : %(message)s")
@@ -630,8 +535,6 @@ def run_program():
     # Get current time
     current_time = tm.time()
 
-    # TODO : Create logs directory if it doesn't exist
-
     # Save TransLoc results to log files
     try:
       with open("logs/stops.log", "w") as fp:
@@ -697,18 +600,7 @@ def run_program():
   # Create image file with Google Static Maps API to show path from SRC to DST
   display_routes(g, path, stops_json, routes_json, "test_image.png")
 
+run_program()
+
 if __name__ == "__main__":
-  m = Tk()
-
-  Label(m, text="Source").grid(row=0)
-  Label(m, text="Destination").grid(row=1)
-
-  e1 = Entry(m)
-  e2 = Entry(m)
-
-  e1.grid(row=0, column=1)
-  e2.grid(row=1, column=1)
-
-  Button(m, text='Find Route', command=run_program).grid(row=2, column=0, sticky=W, pady=4)
-
-  m.mainloop()
+  run_program()
