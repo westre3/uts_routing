@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <title>UTS Routing {{ location_select }}</title>
+  </head>
+  <body>
+    <div class="row">
+      <div class="col-4">
+        <form method="post">
+        <h2>Location</h2>
+          Select a predefined location on Grounds or type in a custom latitude and longitude.
+          <div class="input-group mb-3">
+            <div class="input-group-prepend">
+              <div class="input-group-text">
+                <input type="radio" name="locationSelect" value="predefinedLocation">
+              </div>
+            </div>
+            <select class="custom-select" name="predefinedLocationChoice">
+              <option selected value="Rice Hall">Rice Hall</option>
+              <option value="Thornton Hall">Thornton Hall</option>
+              <option value="Olson Hall">Olson Hall</option>
+              <option value="John Paul Jones Arena">John Paul Jones Arena</option>
+            </select>
+          </div>
+          <div class="input-group mb-3">
+            <div class="input-group-prepend">
+              <div class="input-group-text">
+                <input type="radio" name="locationSelect" value="customLocation">
+              </div>
+            </div>
+            <input type="text" class="form-control" placeholder="Latitude" name="locLat">
+            <input type="text" class="form-control" placeholder="Longitude" name = "locLng">
+          </div>
+        <h2>Destination</h2>
+          Select a predefined destination on Grounds or type in a custom latitude and longitude.
+          <div class="input-group mb-3">
+            <div class="input-group-prepend">
+              <div class="input-group-text">
+                <input type="radio" name="destinationSelect" value="predefinedDestination">
+              </div>
+            </div>
+            <select class="custom-select" name="predefinedDestinationChoice">
+              <option selected value="Rice Hall">Rice Hall</option>
+              <option value="Thornton Hall">Thornton Hall</option>
+              <option value="Olson Hall">Olson Hall</option>
+              <option value="John Paul Jones Arena">John Paul Jones Arena</option>
+            </select>
+          </div>
+          <div class="input-group mb-3">
+            <div class="input-group-prepend">
+              <div class="input-group-text">
+                <input type="radio" name="destinationSelect" value="customDestination">
+              </div>
+            </div>
+            <input type="text" class="form-control" placeholder="Latitude" name="dstLat">
+            <input type="text" class="form-control" placeholder="Longitude" name="dstLng">
+          </div>
+        <div class="input submit">
+          <input type="submit" value="Submit">
+        </div>
+        </form>
+        {% if display_directions %}
+          <h2>Directions</h2>
+            <ol>
+              {% for direction in directions %}
+                <li>{{ direction }}</li>
+              {% endfor %}
+            </ol>
+        {% endif %}
+      </div>
+      <div class="col-8">
+        {% if display_image %}
+          <img class="mx-auto d-block" src="{{ url_for('static', filename=image_name)}}" />
+        {% endif %}
+      </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+  </body>
+</html>

@@ -5,6 +5,8 @@ import sys
 import logging
 from data_structures import *
 import pathlib
+from graphviz import Digraph
+import os
 
 SRC_ID = "SRC"
 DST_ID = "DST"
@@ -56,6 +58,7 @@ def parse_uts_data(g, stops, routes, arrival_estimates):
   # I'm doing this by sorting the stops in order of arrival time estimate
   # for a single vehicle ID because the TransLoc API does not list the stops
   # in order
+#   G = Digraph()
   for route in running_routes:
     stops_on_route = []
     stop_times = {}
@@ -73,10 +76,22 @@ def parse_uts_data(g, stops, routes, arrival_estimates):
     # Sort routes based on arrival time estimate
     stops_on_route.sort(key = lambda stop : stop_times[stop])
 
+
+    # color_lookup = {}
+    # for croute in routes["data"]["347"]:
+    #   color_lookup[croute["route_id"]] = f'#{croute["color"]}'
+
+    # if route_lookup[route] == "Blueline":
+    #   for i in range(len(stops_on_route)):
+    #     G.node(stop_lookup[stops_on_route[i]]["name"])
+    #     G.edge(stop_lookup[stops_on_route[i]]["name"], stop_lookup[stops_on_route[(i+1) % len(stops_on_route)]]["name"], color=color_lookup[route])
+
     # Connect stops in order of arrival time estimate
     for i in range(len(stops_on_route)):
       g.adj_list[stops_on_route[i]].append(Edge(stops_on_route[i], stops_on_route[(i+1) % len(stops_on_route)], route, route_lookup[route]))
       logging.debug(f'Added {route_lookup[route]} edge from stop {stop_lookup[stops_on_route[i]]["name"]} with ID {stops_on_route[i]} to stop {stop_lookup[stops_on_route[(i+1) % len(stops_on_route)]]["name"]} with ID {stops_on_route[(i+1) % len(stops_on_route)]}')
+
+#  G.render("test", view=True)
 
 def dijkstra(g, current_time):
   logging.debug(f"Current time is {current_time}")
@@ -134,7 +149,7 @@ def dijkstra(g, current_time):
           next_bus = u.buses[next_arrival]
 
           # Find the first time that the same bus arrives at the next stop
-          # after it already arrived at this top. This is the time at which
+          # after it already arrived at this stop. This is the time at which
           # we would arrive at v if we traveled along edge e
           arrivals_at_v = [ar for ar in v.arrival_times[e.route_id] if v.buses[ar] == next_bus and ar > next_arrival]
 
@@ -177,6 +192,16 @@ def dijkstra(g, current_time):
 
   if all_walking:
     path = [SRC_ID, DST_ID]
+
+    # Find the edge from SRC to DST
+    src_dst_edge = None
+    for e in g.adj_list[SRC_ID]:
+      if e.to_stop == DST_ID:
+        src_dst_edge = e
+
+    # Set previous and next node pointers appropriately
+    g.nodes[SRC_ID].n = src_dst_edge
+    g.nodes[DST_ID].p = src_dst_edge
 
   for i in range(len(path)):
     logging.debug(f"path[{i}] = {g.nodes[path[i]].name} with ID {g.nodes[path[i]].stop_id}")
@@ -378,7 +403,7 @@ def add_walking_edges(g):
 
   if not src_to_stops_response.ok:
     logging.critical(f"When attempting to access {google_walking_url}, received Status Code {src_to_stops_response.status_code} for Reason {src_to_stops_response.reason}.")
-    sys.exit("Unable to access Google Distance Matrix API")
+    sys.exit("Unable to access GoogleF Distance Matrix API")
 
   src_to_stops_json = src_to_stops_response.json()
 
@@ -441,9 +466,11 @@ def add_walking_edges(g):
 
 
 # Some common locations
-rice_location = "38.0316,-78.5108"
-thornton_location = "38.0333,-78.5097"
-jpa_location = "38.0459,-78.5067"
+location_lookup = {
+"Rice Hall" : {"lat" : "38.0316", "lng" : "-78.5108"},
+"Thornton Hall" : {"lat" : "38.0333", "lng" : "-78.5097"},
+"John Paul Jones Arena" : {"lat" : "38.0459", "lng" : "-78.5067"}
+}
 downtown = "38.0292,-78.4773"
 colonnade = "38.042702, -78.517687"
 colonnade2 = "38.042775,-78.51756"
@@ -451,18 +478,31 @@ lile_location = '38.035015,-78.516131'
 barracks_location = '38.048796,-78.505219'
 lake_monticello = '37.911027,-78.326811'
 
-def conv_to_dict(latlon):
-  latlon = latlon.split(',')
-  return {"lat" : float(latlon[0]), "lng" : float(latlon[1])}
+def conv_to_dict(lat, lng):
+  return {"lat" : float(lat), "lng" : float(lng)}
 
-def run_program():
-  # source = e1.get()
-  # destination = e2.get()
+def run(loc_choice, loc_lat, loc_lng, dst_choice, dst_lat, dst_lng):
+  # Remove any old images
+  image_dir = os.listdir('static/')
+  for file in image_dir:
+    if file.endswith(".png"):
+      os.remove(os.path.join('static/', file))
 
-  source = rice_location
-  destination = jpa_location
+  if loc_choice:
+    src_lat = location_lookup[loc_choice]["lat"]
+    src_lng = location_lookup[loc_choice]["lng"]
+  else:
+    src_lat = loc_lat
+    src_lng = loc_lng
 
-  live = False
+  if dst_choice:
+    dst_lat = location_lookup[dst_choice]["lat"]
+    dst_lng = location_lookup[dst_choice]["lng"]
+  else:
+    dst_lat = dst_lat
+    dst_lng = dst_lng
+
+  live = True
 
   # Create logs folder if it doesn't exist
   pathlib.Path("./logs").mkdir(parents=True, exist_ok=True)
@@ -580,13 +620,13 @@ def run_program():
   parse_uts_data(g, stops_json, routes_json, arrival_estimates_json)
 
   # Add source node
-  location = conv_to_dict(source)
+  location = conv_to_dict(src_lat, src_lng)
   g.nodes[SRC_ID] = Node(SRC_ID, SRC_ID, location)
   g.adj_list[SRC_ID] = []
   logging.debug(f"Added source node at location {location['lat']},{location['lng']}")
 
   # Add destination node
-  location = conv_to_dict(destination)
+  location = conv_to_dict(dst_lat, dst_lng)
   g.nodes[DST_ID] = Node(DST_ID, DST_ID, location)
   g.adj_list[DST_ID] = []
   logging.debug(f"Added destination node at location {location['lat']},{location['lng']}")
@@ -596,11 +636,51 @@ def run_program():
 
   # Run Dijkstra's algorithm on graph
   path = dijkstra(g, current_time)
+  print(path)
+
+  # Use different image name to force Flask to reload image after each iteration
+  image_name = f"{current_time}.png"
 
   # Create image file with Google Static Maps API to show path from SRC to DST
-  display_routes(g, path, stops_json, routes_json, "test_image.png")
+  display_routes(g, path, stops_json, routes_json, f"static/{image_name}")
 
-run_program()
+  directions = []
+  for i in range(len(path)):
+    if path[i] == SRC_ID:
+      pass
+    elif path[i] == DST_ID:
+      directions.append("Walk to destination")
+    else:
+      directions.append(f"Take bus from {g.nodes[path[i-1]].name} to {g.nodes[path[i]].name}")
 
-if __name__ == "__main__":
-  run_program()
+  visualize = False
+
+  if visualize:
+    color_lookup = {}
+    for route in routes_json["data"]["347"]:
+      color_lookup[route["route_id"]] = route["color"]
+
+    edges_on_path = [g.nodes[node].n for node in path[:-1]]
+
+    G = Digraph()
+
+    for node in g.nodes:
+      G.node(g.nodes[node].name)
+
+    for node in g.adj_list:
+      for e in g.adj_list[node]:
+        if e.name == "walking":
+          color = "gray"
+        else:
+          color = f'#{color_lookup[e.route_id]}'
+
+        if e in edges_on_path:
+          penwidth = "1.0"
+        else:
+          penwidth = "1.0"
+
+        G.edge(g.nodes[e.from_stop].name, g.nodes[e.to_stop].name, color=color, penwidth=penwidth)
+
+      G.render("test", view=True)
+
+  return image_name, directions
