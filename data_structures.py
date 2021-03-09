@@ -1,5 +1,6 @@
 import math
 import itertools
+import requests
 from heapq import *
 
 # Based on the Python docs' example code for using heapq
@@ -112,3 +113,43 @@ class Graph:
     # A mapping of stop IDs to the list of edges the corresponding node in the
     # graph has
     self.adj_list = {}
+
+# Get building names, latitude, longitude from UVA Dev Hub
+buildings = requests.get('https://api.devhub.virginia.edu/v1/facilities').json()
+location_lookup = {}
+for building in buildings:
+  if building["Latitude"] is not None and building["Longitude"] is not None:
+    location_lookup[building["Name"].title()] = f'{building["Latitude"]},{building["Longitude"]}'
+
+# Sort alphabetically by building name
+location_lookup = dict(sorted(location_lookup.items()))
+
+
+# location_lookup = {
+# "AFC" : "38.0329,-78.5134",
+# "Fontaine Research Park" : "38.0246,-78.5261",
+# "Gilmer Hall" : "38.0342,-78.5128",
+# "Gooch/Dillard" : "38.0291,-78.5182",
+# "Hereford" : "38.0301,-78.5196",
+# "John Paul Jones Arena" : "38.0460,-78.5068",
+# "O Hill" : "38.0348,-78.5152",
+# "Rice Hall" : "38.0316,-78.5108",
+# "Scott Stadium" : "38.0311,-78.5137",
+# "Thornton Hall" : "38.0333,-78.5097"
+# }
+
+# Place ID lookup for Google APIs. This dictionary is currently unused, but
+# will become very useful if Google ever adds support for place IDs to their
+# Static Maps API
+place_id_lookup = {
+  "Scott Stadium" : "ChIJ83CLDFyGs4kRlpbwbea2AWc",
+  "Rice Hall"     : "ChIJNVN8Z1uGs4kR7JcEE4iqkGQ",
+  "Thornton Hall" : "ChIJYUh6OluGs4kR677pkwWBd7E",
+  "John Paul Jones Arena" : "ChIJda7wKE2Gs4kRzsMO7thzcw4"
+}
+
+# Latitude and longitude limits of Charlottesville, VA
+west_longitude_limit = -78.523574
+east_longitude_limit = -78.447214
+north_latitude_limit = 38.009506
+south_latitude_limit = 38.070897

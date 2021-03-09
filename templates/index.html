@@ -9,6 +9,9 @@
     <title>UTS Routing {{ location_select }}</title>
   </head>
   <body>
+    <h1>UVA University Transit Service (UTS) Routing</h1>
+    <p> This is a tool meant to help those using UVA's UTS service find the fastest route to their destination using the bus system.</p>
+    <p> Feel free to view the code on <a href="https://github.com/westre3/uts_routing.git" target="_blank">GitHub</a>, or check out some of my other <a href="#">projects</a>!</p>
     <div class="row">
       <div class="col-4">
         <form method="post">
@@ -21,10 +24,9 @@
               </div>
             </div>
             <select class="custom-select" name="predefinedLocationChoice">
-              <option selected value="Rice Hall">Rice Hall</option>
-              <option value="Thornton Hall">Thornton Hall</option>
-              <option value="Olson Hall">Olson Hall</option>
-              <option value="John Paul Jones Arena">John Paul Jones Arena</option>
+              {% for location in locations %}
+                <option value="{{ location }}">{{ location }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="input-group mb-3">
@@ -45,10 +47,9 @@
               </div>
             </div>
             <select class="custom-select" name="predefinedDestinationChoice">
-              <option selected value="Rice Hall">Rice Hall</option>
-              <option value="Thornton Hall">Thornton Hall</option>
-              <option value="Olson Hall">Olson Hall</option>
-              <option value="John Paul Jones Arena">John Paul Jones Arena</option>
+              {% for location in locations %}
+                <option value="{{ location }}">{{ location }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="input-group mb-3">
@@ -60,11 +61,23 @@
             <input type="text" class="form-control" placeholder="Latitude" name="dstLat">
             <input type="text" class="form-control" placeholder="Longitude" name="dstLng">
           </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="display_graph" value="True" id="flexCheckDefault">
+          <label class="form-check-label" for="flexCheckDefault">
+            Visualize Graph (greatly increases computation time)
+          </label>
+        </div>
         <div class="input submit">
           <input type="submit" value="Submit">
         </div>
         </form>
-        {% if display_directions %}
+        {% if error == "unknown" %}
+          <p><b>I have to admit, you have me stumped. I have no idea how you made this strange error happen. If you don't mind, could you take a minute to <a href="#">contact me</a> and let me know how you caused this? I'd really appreciate it!</b></p>
+        {% elif error == "invalid_selection" %}
+          <p><b>Please select both a location and destination option!</b></p>
+        {% elif error == "out_of_bounds" %}
+          <p><b>If it's all the same to you, let's stick to the Charlottesville area.</b></p>
+        {% elif display_directions %}
           <h2>Directions</h2>
             <ol>
               {% for direction in directions %}
@@ -75,10 +88,17 @@
       </div>
       <div class="col-8">
         {% if display_image %}
-          <img class="mx-auto d-block" src="{{ url_for('static', filename=image_name)}}" />
+          <img class="mx-auto d-block" src="{{ url_for('static', filename=map_image_name) }}" />
         {% endif %}
       </div>
     </div>
+    {% if display_graph %}
+    <div class="row">
+      <div class="col-12">
+        <img class="mx-auto d-block img-fluid" src="{{ url_for('static', filename=graph_image_name) }}" />
+      </div>
+    </div>
+    {% endif %}
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
