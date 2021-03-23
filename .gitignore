@@ -1,5 +1,5 @@
 __pycache__/
 logs/
-*.png
+static/
 GoogleMapsAPIKey.txt
 TransLocKey.txt
